@@ -76,8 +76,26 @@ const COLOR_REGEXP = `^%C\{([^\}]+)\}`
 // Types
 // ----------------------------------------------------------------------------
 
-// The following type defines an effect
+// The following type defines an RGB color
+type Color struct {
+	R, G, B uint8
+}
+
+// The following type defines a combination of foreground, background colors and
+// properties
 type Effect struct {
+	Fg, Bg     Color
+	Properties uint64
+}
+
+// The following type defines a combination of foreground color and properties
+type FgEffect struct {
+	R, G, B    uint8
+	Properties uint64
+}
+
+// The following type defines a combination of background color and properties
+type BgEffect struct {
 	R, G, B    uint8
 	Properties uint64
 }
@@ -91,6 +109,62 @@ var colorVerb = regexp.MustCompile(COLOR_REGEXP)
 
 // Functions
 // ----------------------------------------------------------------------------
+
+// Process the specified color specification and return a string representing
+// the foreground color. It returns an error in case the specification is given
+// in an unknown format
+func processForegroundColor(arg any) (output string, err error) {
+
+	// This package supports various formats for specifying colors
+	switch val := arg.(type) {
+
+	case Effect:
+
+		output = fmt.Sprintf("%v;%v;%v", val.Fg.R, val.Fg.G, val.Fg.B)
+
+	case FgEffect:
+
+		output = fmt.Sprintf("%v;%v;%v", val.R, val.G, val.B)
+
+	case BgEffect:
+
+		// This type does not provide information about the foreground color
+		break
+
+	default:
+		return "", fmt.Errorf("Unsuported foreground color format: %v\n", arg)
+	}
+
+	return
+}
+
+// Process the specified color specification and return a string representing
+// the background color. It returns an error in case the specification is given
+// in an unknown format
+func processBackgroundColor(arg any) (output string, err error) {
+
+	// This package supports various formats for specifying colors
+	switch val := arg.(type) {
+
+	case Effect:
+
+		output = fmt.Sprintf("%v;%v;%v", val.Bg.R, val.Bg.G, val.Bg.B)
+
+	case FgEffect:
+
+		// This type does not provide information about the background color
+		break
+
+	case BgEffect:
+
+		output = fmt.Sprintf("%v;%v;%v", val.R, val.G, val.B)
+
+	default:
+		return "", fmt.Errorf("Unsuported background color format: %v\n", arg)
+	}
+
+	return
+}
 
 // Process the specified properties and return the string with its ANSI codes
 func processProperties(properties uint64) (output string) {
@@ -111,12 +185,43 @@ func processProperties(properties uint64) (output string) {
 // color verb with its prefix and suffix
 func substituteColorVerb(chunk string, arg any) (output string, err error) {
 
-	// This package supports providing the argument in various formats
+	// This package supports various formats for specifying colors and
+	// properties
 	switch val := arg.(type) {
 
 	case Effect:
 
-		output = fmt.Sprintf(`%v;%v;%v;%v%vm%v%v`, prefix+foreground_prefix, val.R, val.G, val.B, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+		// Get the foreground and background specs
+		fg, fgerr := processForegroundColor(val)
+		bg, bgerr := processBackgroundColor(val)
+		if fgerr != nil {
+			return "", err
+		}
+		if bgerr != nil {
+			return "", err
+		}
+
+		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+
+	case FgEffect:
+
+		// Get the foreground spec
+		fg, fgerr := processForegroundColor(val)
+		if fgerr != nil {
+			return "", err
+		}
+
+		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, foreground_prefix, fg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+
+	case BgEffect:
+
+		// Get the background specs
+		bg, bgerr := processBackgroundColor(val)
+		if bgerr != nil {
+			return "", err
+		}
+
+		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, background_prefix, bg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
 
 	default:
 		return "", fmt.Errorf("Unsupported format: %v\n", arg)
