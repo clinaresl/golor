@@ -6,13 +6,14 @@
 // Carlos Linares López <carlos.linares@uc3m.es>
 //
 
-// golor provides means for showing text on the standard color with different
+// golor provides means for showing text on the standard output with different
 // selections of color for both the background and the foreground, and also
-// other effects. It is intended to ease usage.
+// other properties. It is intended to ease usage.
 //
 // golor is strongly based on the interface provided by the fmt Print family
 // functions. It provides a new verb %C{} which encloses the string between
-// curly brackets (which is welcome to contain other verbs as well)
+// curly brackets (which is welcome to contain other verbs as well) with an ANSI
+// prefix and suffix that produce the desired effect
 package golor
 
 import (
@@ -39,9 +40,26 @@ const (
 	suffix             = "\033[0m"
 )
 
-// Next, the different constants that can be used for defining properties
+// Constants used to filter the red, green and blue colors of the foreground and
+// background colors when using either uint32 or uint64 types
 const (
-	BOLD = 1 << (iota + 6)
+
+	// Specification with uin32
+	properties32 = 0xff000000
+	fg_red32     = 0xff0000
+	fg_green32   = 0x00ff00
+	fg_blue32    = 0x0000ff
+
+	// Specification with uin64
+	properties64 = 0x00ff000000000000
+	bg_red64     = 0xff0000000000
+	bg_green64   = 0x00ff00000000
+	bg_blue64    = 0x0000ff000000
+)
+
+// Constants that can be used for defining properties with any type
+const (
+	BOLD = 1 << (iota + 0)
 	DIM
 	ITALIC
 	UNDERLINE
@@ -51,7 +69,7 @@ const (
 )
 
 // Provide a map between properties and their sequence
-var propertyPrefix = map[uint64]string{
+var propertyPrefix = map[uint8]string{
 	BOLD:        bold_prefix,
 	DIM:         dim_prefix,
 	ITALIC:      italic_prefix,
@@ -63,15 +81,11 @@ var propertyPrefix = map[uint64]string{
 
 // The following regular expression is used for matching any verb, thouse used
 // in the fmt Printf family function, and also the verb %C{...}
-const ALL_VERBS_REGEXP = `%(C\{([^\}]+)\}|(?<flags>[-+#0 ])?(?<width>\d+|\*)?(?:\.(?<precision>\d+|\*))?(?<length>[hljztL]|hh|ll)?(?<specifier>[diuoxXfFeEgGaAcspnTv]))`
-
-// The following regular expression is used for matching the different verbs
-// used in the fmt Printf family function, excluding the new verb %C{...}
-const VERB_REGEXP = `%(?<flags>[-+#0 ])?(?<width>\d+|\*)?(?:\.(?<precision>\d+|\*))?(?<length>[hljztL]|hh|ll)?(?<specifier>[diuoxXfFeEgGaAcspn])`
+const all_verbs_regexp = `%(C\{([^\}]+)\}|(?<flags>[-+#0 ])?(?<width>\d+|\*)?(?:\.(?<precision>\d+|\*))?(?<length>[hljztL]|hh|ll)?(?<specifier>[diuoxXfFeEgGaAcspnTv]))`
 
 // The following regular expression is used instead for matching color codes
 // only %C{...}
-const COLOR_REGEXP = `^%C\{([^\}]+)\}`
+const color_regexp = `^%C\{([^\}]+)\}`
 
 // Types
 // ----------------------------------------------------------------------------
@@ -85,27 +99,35 @@ type Color struct {
 // properties
 type Effect struct {
 	Fg, Bg     Color
-	Properties uint64
+	Properties uint8
 }
 
 // The following type defines a combination of foreground color and properties
 type FgEffect struct {
 	R, G, B    uint8
-	Properties uint64
+	Properties uint8
 }
 
 // The following type defines a combination of background color and properties
 type BgEffect struct {
 	R, G, B    uint8
-	Properties uint64
+	Properties uint8
 }
+
+// It is also possible to define just the foreground color and the properties
+// using an uint32
+type Effect32 = uint32
+
+// It is also possible to define the background and foreground colors (in that
+// order) and the properties using an uint64
+type Effect64 = uint64
 
 // Variables
 // ----------------------------------------------------------------------------
 
 // (Must)Compiled regexps
-var allVerbs = regexp.MustCompile(ALL_VERBS_REGEXP)
-var colorVerb = regexp.MustCompile(COLOR_REGEXP)
+var allVerbs = regexp.MustCompile(all_verbs_regexp)
+var colorVerb = regexp.MustCompile(color_regexp)
 
 // Functions
 // ----------------------------------------------------------------------------
@@ -130,6 +152,10 @@ func processForegroundColor(arg any) (output string, err error) {
 
 		// This type does not provide information about the foreground color
 		break
+
+	case Effect32:
+
+		output = fmt.Sprintf("%v;%v;%v", (val&fg_red32)>>16, (val&fg_green32)>>8, val&fg_blue32)
 
 	default:
 		return "", fmt.Errorf("Unsuported foreground color format: %v\n", arg)
@@ -159,6 +185,11 @@ func processBackgroundColor(arg any) (output string, err error) {
 
 		output = fmt.Sprintf("%v;%v;%v", val.R, val.G, val.B)
 
+	case Effect32:
+
+		// This type does not provide information about the background color
+		break
+
 	default:
 		return "", fmt.Errorf("Unsuported background color format: %v\n", arg)
 	}
@@ -167,10 +198,10 @@ func processBackgroundColor(arg any) (output string, err error) {
 }
 
 // Process the specified properties and return the string with its ANSI codes
-func processProperties(properties uint64) (output string) {
+func processProperties(properties uint8) (output string) {
 
 	// Process all properties one by one
-	var idx uint64
+	var idx uint8
 	for idx = BOLD; idx <= CROSSED_OUT; idx <<= 1 {
 
 		if properties&idx != 0 {
@@ -181,8 +212,8 @@ func processProperties(properties uint64) (output string) {
 	return
 }
 
-// Given a string with a color verb and its argument, return the contents of the
-// color verb with its prefix and suffix
+// Given a string chunk, return it preceded by the color prefix corresponding to
+// the given argument and ended with the corresponding suffix
 func substituteColorVerb(chunk string, arg any) (output string, err error) {
 
 	// This package supports various formats for specifying colors and
@@ -201,7 +232,7 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 			return "", err
 		}
 
-		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(val.Properties), chunk, suffix)
 
 	case FgEffect:
 
@@ -211,7 +242,7 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 			return "", err
 		}
 
-		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, foreground_prefix, fg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, foreground_prefix, fg, processProperties(val.Properties), chunk, suffix)
 
 	case BgEffect:
 
@@ -221,7 +252,17 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 			return "", err
 		}
 
-		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, background_prefix, bg, processProperties(val.Properties), chunk[3:len(chunk)-1], suffix)
+		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, background_prefix, bg, processProperties(val.Properties), chunk, suffix)
+
+	case Effect32:
+
+		// Get the foreground spec
+		fg, fgerr := processForegroundColor(val)
+		if fgerr != nil {
+			return "", err
+		}
+
+		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, foreground_prefix, fg, processProperties(uint8((val&properties32)>>24)), chunk, suffix)
 
 	default:
 		return "", fmt.Errorf("Unsupported format: %v\n", arg)
@@ -232,13 +273,14 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 
 // substitute all occurrences of color verbs by their corresponding prefixes and
 // suffixes without affecting the other verbs in the format string. It returns
-// the resulting string with all color verbs properly substituted, and an error
+// the resulting string with all color verbs properly substituted, the list of
+// arguments to be used in the substitution of the remaining verbs, and an error
 // in case any is found.
-func ProcessColorVerbs(format string, a ...any) (output string, err error) {
+func processColorVerbs(format string, a ...any) (output string, args []any, err error) {
 
-	// Use the all verbs regexp to locate all verbs. This is important because
-	// to substitute the color verbs it is necessary to know precisely the
-	// arguments that have to be used
+	// Keep a counter over the arguments given in a to know which ones to use
+	// for substituting the color verbs, and which to use in the substitutions
+	// performed by the Printf family
 	var idx int
 
 	// An offset is needed to know the position from which the last chunk of
@@ -252,24 +294,55 @@ func ProcessColorVerbs(format string, a ...any) (output string, err error) {
 		// Check whether this is a color verb
 		if colorVerb.MatchString(format[match[0]:match[1]]) {
 
+			// First, process the contents of the color verb. Notice that all
+			// the remaining args are used, but the first one which must be used
+			// later for substituting the color verb
+			// log.Println(format[match[0]+3 : match[1]-1])
+			// log.Println(idx)
+			// log.Println(a[idx+1:])
+			contents, cargs, cerr := processColorVerbs(format[match[0]+3:match[1]-1], a[idx+1:]...)
+			// log.Printf(" -> %v (%v): %v\n ", contents, cargs, len(cargs))
+			if cerr != nil {
+				return "", nil, err
+			}
+
 			// copy from the previous offset until the end of the color verb,
 			// substitute it, and update the offset
-			if chunk, err := substituteColorVerb(format[match[0]:match[1]], a[idx]); err == nil {
+			if chunk, err := substituteColorVerb(contents, a[idx]); err == nil {
 				output += format[offset:match[0]]
 				output += chunk
 				offset = match[1]
 			} else {
-				return "", err
+				return "", nil, err
 			}
+
+			// The number of primary args used for making substitutions within
+			// the color verb equals the difference between the number of
+			// primary args awaiting to be processed and the number of args that
+			// result after the nested substitution ---i.e., any verb used in
+			// the nested substitution must be skipped now
+			idx += len(a) - idx - 1 - (len(cargs))
+
 		} else {
 
 			// Otherwise, copy all elements in the output and update the offset
 			output += format[offset:match[1]]
 			offset = match[1]
+
+			// and preserve this argument to be used a posteriori
+			args = append(args, a[idx])
 		}
 
 		// And, in any case increment the counter of parameters
 		idx++
+	}
+
+	// Finally, add to the output string the rest of it since the last offset,
+	// and also any other argument that have not been used (this is relevant
+	// when procesing nested chunks of the original string)
+	output += format[offset:]
+	if len(a) > idx {
+		args = append(args, a[idx:]...)
 	}
 
 	return
@@ -280,7 +353,17 @@ func ProcessColorVerbs(format string, a ...any) (output string, err error) {
 // bytes written and any write error encountered.
 func Printf(format string, a ...any) (n int, err error) {
 
-	return
+	// First, substitute all the color verbs
+	cformat, cargs, cerr := processColorVerbs(format, a...)
+	if cerr != nil {
+		return 0, err
+	}
+
+	// Next, format the resulting string with the arguments that were not
+	// used in the color verbs
+	// log.Printf(" cformat: %v\n", cformat)
+	// log.Printf(" cargs  : %v\n\n", cargs)
+	return fmt.Printf(cformat, cargs...)
 }
 
 // Local Variables:
