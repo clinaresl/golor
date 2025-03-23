@@ -57,7 +57,8 @@ const (
 	bg_blue64    = 0x0000ff000000
 )
 
-// Constants that can be used for defining properties with any type
+// Constants that can be used for defining properties with the types [Effect],
+// [FgEffect] and [BgEffect]
 const (
 	BOLD = 1 << (iota + 0)
 	DIM
@@ -66,6 +67,28 @@ const (
 	SLOW_BLINK
 	RAPID_BLINK
 	CROSSED_OUT
+)
+
+// Constants that can be used for defining properties with the type [Effect32]
+const (
+	BOLD32 = 1 << (iota + 24)
+	DIM32
+	ITALIC32
+	UNDERLINE32
+	SLOW_BLINK32
+	RAPID_BLINK32
+	CROSSED_OUT32
+)
+
+// Constants that can be used for defining properties with the type [Effect64]
+const (
+	BOLD64 = 1 << (iota + 48)
+	DIM64
+	ITALIC64
+	UNDERLINE64
+	SLOW_BLINK64
+	RAPID_BLINK64
+	CROSSED_OUT64
 )
 
 // Provide a map between properties and their sequence
@@ -90,25 +113,28 @@ const color_regexp = `^%C\{([^\}]+)\}`
 // Types
 // ----------------------------------------------------------------------------
 
-// The following type defines an RGB color
+// The following type defines an RGB color to be used only with type [Effect]
 type Color struct {
 	R, G, B uint8
 }
 
 // The following type defines a combination of foreground, background colors and
-// properties
+// properties. Note that both the foreground and background colors have to be of
+// type [Color]
 type Effect struct {
 	Fg, Bg     Color
 	Properties uint8
 }
 
-// The following type defines a combination of foreground color and properties
+// The following type defines a combination of foreground color and properties.
+// The foregrround color must be given with three different bytes
 type FgEffect struct {
 	R, G, B    uint8
 	Properties uint8
 }
 
-// The following type defines a combination of background color and properties
+// The following type defines a combination of background color and properties.
+// The backgrround color must be given with three different bytes
 type BgEffect struct {
 	R, G, B    uint8
 	Properties uint8
@@ -157,6 +183,10 @@ func processForegroundColor(arg any) (output string, err error) {
 
 		output = fmt.Sprintf("%v;%v;%v", (val&fg_red32)>>16, (val&fg_green32)>>8, val&fg_blue32)
 
+	case Effect64:
+
+		output = fmt.Sprintf("%v;%v;%v", (val&fg_red32)>>16, (val&fg_green32)>>8, val&fg_blue32)
+
 	default:
 		return "", fmt.Errorf("Unsuported foreground color format: %v\n", arg)
 	}
@@ -189,6 +219,10 @@ func processBackgroundColor(arg any) (output string, err error) {
 
 		// This type does not provide information about the background color
 		break
+
+	case Effect64:
+
+		output = fmt.Sprintf("%v;%v;%v", (val&bg_red64)>>40, (val&bg_green64)>>32, val&bg_blue64>>24)
 
 	default:
 		return "", fmt.Errorf("Unsuported background color format: %v\n", arg)
@@ -264,6 +298,20 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 
 		output = fmt.Sprintf(`%v%v;%v%vm%v%v`, prefix, foreground_prefix, fg, processProperties(uint8((val&properties32)>>24)), chunk, suffix)
 
+	case Effect64:
+
+		// Get the foreground and background specs
+		fg, fgerr := processForegroundColor(val)
+		bg, bgerr := processBackgroundColor(val)
+		if fgerr != nil {
+			return "", err
+		}
+		if bgerr != nil {
+			return "", err
+		}
+
+		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(uint8(val&properties64)>>48), chunk, suffix)
+
 	default:
 		return "", fmt.Errorf("Unsupported format: %v\n", arg)
 	}
@@ -297,11 +345,7 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 			// First, process the contents of the color verb. Notice that all
 			// the remaining args are used, but the first one which must be used
 			// later for substituting the color verb
-			// log.Println(format[match[0]+3 : match[1]-1])
-			// log.Println(idx)
-			// log.Println(a[idx+1:])
 			contents, cargs, cerr := processColorVerbs(format[match[0]+3:match[1]-1], a[idx+1:]...)
-			// log.Printf(" -> %v (%v): %v\n ", contents, cargs, len(cargs))
 			if cerr != nil {
 				return "", nil, err
 			}
@@ -348,9 +392,9 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 	return
 }
 
-// Cprintf is the counterpart of Printf. It just substitutes the %C{...}
-// sections and queries fmt.Printf to resolve the rest. It returns the number of
-// bytes written and any write error encountered.
+// Cprintf is the counterpart of Printf. It just substitutes the color verbs and
+// queries fmt.Printf to resolve the rest. It returns the number of bytes
+// written and any write error encountered.
 func Printf(format string, a ...any) (n int, err error) {
 
 	// First, substitute all the color verbs
@@ -361,8 +405,6 @@ func Printf(format string, a ...any) (n int, err error) {
 
 	// Next, format the resulting string with the arguments that were not
 	// used in the color verbs
-	// log.Printf(" cformat: %v\n", cformat)
-	// log.Printf(" cargs  : %v\n\n", cargs)
 	return fmt.Printf(cformat, cargs...)
 }
 
