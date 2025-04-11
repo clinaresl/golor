@@ -18,6 +18,7 @@ package golor
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 )
 
@@ -320,11 +321,16 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 }
 
 // substitute all occurrences of color verbs by their corresponding prefixes and
-// suffixes without affecting the other verbs in the format string. It returns
-// the resulting string with all color verbs properly substituted, the list of
-// arguments to be used in the substitution of the remaining verbs, and an error
-// in case any is found.
-func processColorVerbs(format string, a ...any) (output string, args []any, err error) {
+// suffixes without affecting the other verbs in the format string. It returns:
+//
+//  1. The resulting string with all color verbs properly substituted,
+//
+//  2. The list of arguments to be used in the substitution of the remaining verbs,
+//
+//  3. The number of arguments consumed in the substitution of non-color verbs.
+//
+//  4. An error in case any is found.
+func processColorVerbs(format string, a ...any) (output string, args []any, nargs int, err error) {
 
 	// Keep a counter over the arguments given in a to know which ones to use
 	// for substituting the color verbs, and which to use in the substitutions
@@ -345,9 +351,14 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 			// First, process the contents of the color verb. Notice that all
 			// the remaining args are used, but the first one which must be used
 			// later for substituting the color verb
-			contents, cargs, cerr := processColorVerbs(format[match[0]+3:match[1]-1], a[idx+1:]...)
+			log.Printf(" [nested process: '%v']\n", format[match[0]+3:match[1]-1])
+			contents, cargs, cnargs, cerr := processColorVerbs(format[match[0]+3:match[1]-1], a[idx+1:]...)
+			log.Printf("\t contents: %v\n", contents)
+			log.Printf("\t cargs   : %v\n", cargs)
+			log.Printf("\t cnargs  : %v\n", cnargs)
+			log.Printf("\t cerr    : %v\n", cerr)
 			if cerr != nil {
-				return "", nil, err
+				return "", nil, 0, err
 			}
 
 			// copy from the previous offset until the end of the color verb,
@@ -357,16 +368,23 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 				output += chunk
 				offset = match[1]
 			} else {
-				return "", nil, err
+				return "", nil, 0, err
 			}
 
-			// The number of primary args used for making substitutions within
-			// the color verb equals the difference between the number of
-			// primary args awaiting to be processed and the number of args that
-			// result after the nested substitution ---i.e., any verb used in
-			// the nested substitution must be skipped now
-			idx += len(a) - idx - 1 - (len(cargs))
+			// Next, copy all the necessary args to make the necessary
+			// substitutions later inside the color-verb. 'cnargs' is the number
+			// of non-color verbs found within this color verb.
+			for i := 0; i < cnargs; i++ {
 
+				// Next, we copy all the arguments necessary to substitute the
+				// non-color verbs inside the color verb we just processed. Note
+				// we add 1 to avoid cosidering the argument of the color verb
+				args = append(args, a[i+1])
+			}
+
+			// and update the counter of the next arguments to used. Again, note
+			// we add 1 to avoid re-using the argument of the color verb
+			idx += 1 + cnargs
 		} else {
 
 			// Otherwise, copy all elements in the output and update the offset
@@ -374,11 +392,13 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 			offset = match[1]
 
 			// and preserve this argument to be used a posteriori
+			nargs++
 			args = append(args, a[idx])
-		}
+			log.Printf("\t args    : %v\n\n", args)
 
-		// And, in any case increment the counter of parameters
-		idx++
+			// and update the counter of the next argument to use.
+			idx++
+		}
 	}
 
 	// Finally, add to the output string the rest of it since the last offset,
@@ -398,13 +418,16 @@ func processColorVerbs(format string, a ...any) (output string, args []any, err 
 func Printf(format string, a ...any) (n int, err error) {
 
 	// First, substitute all the color verbs
-	cformat, cargs, cerr := processColorVerbs(format, a...)
+	cformat, cargs, cnargs, cerr := processColorVerbs(format, a...)
 	if cerr != nil {
 		return 0, err
 	}
 
 	// Next, format the resulting string with the arguments that were not
 	// used in the color verbs
+	log.Printf(" cformat: %+v", cformat)
+	log.Printf(" cargs  : %+v\n", cargs)
+	log.Printf(" cnargs : %+v\n", cnargs)
 	return fmt.Printf(cformat, cargs...)
 }
 
