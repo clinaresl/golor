@@ -310,7 +310,7 @@ func substituteColorVerb(chunk string, arg any) (output string, err error) {
 			return "", err
 		}
 
-		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(uint8(val&properties64)>>48), chunk, suffix)
+		output = fmt.Sprintf(`%v%v;%v;%v;%v%vm%v%v`, prefix, foreground_prefix, fg, background_prefix, bg, processProperties(uint8(val&properties64>>48)), chunk, suffix)
 
 	default:
 		return "", fmt.Errorf("Unsupported format: %v\n", arg)
