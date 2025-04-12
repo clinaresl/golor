@@ -464,8 +464,7 @@ func Printf(format string, a ...any) (n int, err error) {
 		return 0, err
 	}
 
-	// Next, format the resulting string with the arguments that were not
-	// used in the color verbs
+	// Let fmt.Printf do the rest of the job
 	return fmt.Printf(cformat, cargs...)
 }
 
@@ -480,8 +479,7 @@ func Sprintf(format string, a ...any) string {
 		return ""
 	}
 
-	// Next, format the resulting string with the arguments that were not
-	// used in the color verbs
+	// Let fmt.Sprintf do the rest of the job
 	return fmt.Sprintf(cformat, cargs...)
 }
 
@@ -489,16 +487,18 @@ func Sprintf(format string, a ...any) string {
 // color verbs (%C{...}) and queries fmt.Fprintf to substitute the rest and to
 // write them in the given writer. It returns the number of bytes written and
 // any write error encountered.
+//
+// It panics if the first argument after the writer is not a string
 func Fprintf(w io.Writer, a ...any) (n int, err error) {
 
-	// First, substitute all the color verbs
+	// First, substitute all the color verbs. Note that the function panics if
+	// the first argument after the writer is not a string
 	cformat, cargs, _, cerr := processColorVerbs(a[0].(string), a[1:]...)
 	if cerr != nil {
 		return 0, err
 	}
 
-	// Next, format the resulting string with the arguments that were not
-	// used in the color verbs
+	// Let fmt.Fprintf do the rest of the job
 	return fmt.Fprintf(w, cformat, cargs...)
 }
 
