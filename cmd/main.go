@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"iter"
 	"math"
 
 	"github.com/clinaresl/golor"
 )
 
+// Given three bytes with R, G and B values, return the Hue, Saturation and
+// Lightness of its combination
 func RgbToHsl(r, g, b uint8) (h, s, l float64) {
 
 	rf := float64(r)
@@ -46,6 +50,8 @@ func RgbToHsl(r, g, b uint8) (h, s, l float64) {
 	return
 }
 
+// Given the Hue, Saturation and Lightness of a combination of red, green and
+// blue, return its three primary colors as bytes
 func HslToRgb(h, s, l float64) (r, g, b uint8) {
 	var rF, gF, bF float64
 
@@ -84,7 +90,11 @@ func HslToRgb(h, s, l float64) (r, g, b uint8) {
 	return uint8(rF * 0xff), uint8(gF * 0xff), uint8(bF * 0xff)
 }
 
-func hslGradient(startRGB, endRGB uint32, steps int) (gradient []uint32) {
+// Use the HSL model to create a pleasant gradient of color with the given
+// number of steps from the start to the specified end. Note that the start and
+// end consist of a combination of red, green and blue and thus, they are given
+// as uint32
+func hslGradient(startRGB, endRGB uint32, steps int) iter.Seq2[int, uint32] {
 
 	rstart := uint8((startRGB >> 16) & 0x0000ff)
 	gstart := uint8((startRGB >> 8) & 0x0000ff)
@@ -97,79 +107,53 @@ func hslGradient(startRGB, endRGB uint32, steps int) (gradient []uint32) {
 	h1, s1, l1 := RgbToHsl(rstart, gstart, bstart)
 	h2, s2, l2 := RgbToHsl(rend, gend, bend)
 
-	for i := 0; i < steps; i++ {
-		t := float64(i) / float64(steps-1)
+	return func(yield func(int, uint32) bool) {
 
-		h := h1 + (h2-h1)*t
-		s := s1 + (s2-s1)*t
-		l := l1 + (l2-l1)*t
+		for i := range steps {
+			t := float64(i) / float64(steps-1)
 
-		r, g, b := HslToRgb(h, s, l)
-		color := (uint32(r) << 16) | (uint32(g) << 8) | uint32(b)
-		gradient = append(gradient, color)
+			h := h1 + (h2-h1)*t
+			s := s1 + (s2-s1)*t
+			l := l1 + (l2-l1)*t
+
+			r, g, b := HslToRgb(h, s, l)
+			color := (uint32(r) << 16) | (uint32(g) << 8) | uint32(b)
+			if !yield(i, color) {
+				return
+			}
+		}
 	}
-
-	return gradient
 }
 
-// fade-in the given string using the combination of colors red (r), green (g)
-// and blue in the foreground without affecting the background
-func fadeInFg(str string, r, g, b bool) {
+// Print the given string with a pleasant foreground gradient from the start
+// combination of red, green and blue until the specified end
+func fadeInForeground(str string, start, end uint32) {
 
-	// for all characters in the given string
-	for idx, val := range str {
-
-		// compute a value from 0 to 0xff, so that the first character gets the
-		// value 0x00, and the last one gets the value 0xff
-		sat := uint32(0xff*idx) / uint32(len(str))
-
-		// now, compute the foreground color using the given combination of red, green and blue
-		fg := uint32(0)
-		if r {
-			fg |= sat << 16
-		}
-		if g {
-			fg |= sat << 8
-		}
-		if b {
-			fg |= sat
-		}
-		golor.Printf("%C{%c}", fg, val)
-	}
-	golor.Printf("\n")
-}
-
-// fade-in the given string using the combination of colors red (r), green (g)
-// and blue in the background without affecting the background
-func fadeInBg(str string, r, g, b bool) {
-
-	// for all characters in the given string
-	for idx, val := range str {
-
-		// compute a value from 0 to 0xff, so that the first character gets the
-		// value 0x00, and the last one gets the value 0xff
-		sat := uint64(0xff*idx) / uint64(len(str))
-
-		// now, compute the foreground color using the given combination of red, green and blue
-		bg := uint64(0)
-		if r {
-			bg |= sat << 40
-		}
-		if g {
-			bg |= sat << 32
-		}
-		if b {
-			bg |= sat << 24
-		}
-		golor.Printf("%C{%c}", bg, val)
-	}
-	golor.Printf("\n")
-}
-
-func fadeIn(str string, from, to uint32) {
-
-	for idx, val := range hslGradient(from, to, len(str)) {
+	for idx, val := range hslGradient(start, end, len(str)) {
 		golor.Printf("%C{%c}", val, str[idx])
+	}
+
+	golor.Printf("\n")
+}
+
+// Print the given string with a pleasant background gradient from the start
+// combination of red, green and blue until the specified end.
+func fadeInBackground(str string, start, end uint32) {
+
+	for idx, val := range hslGradient(start, end, len(str)) {
+		golor.Printf("%C{%c}", uint64(val)<<24, str[idx])
+	}
+
+	golor.Printf("\n")
+}
+
+// Print the given string with a pleasant gradient from the start combination of
+// red, green and blue until the specified end. The gradient is computed for the
+// foreground and the background is the opposite
+func fadeInForegroundBackground(str string, start, end uint32) {
+
+	for idx, val := range hslGradient(start, end, len(str)) {
+		golor.Printf("%C{%c}", uint64(val^0x00ffffff)<<24|uint64(val), str[idx])
 	}
 
 	golor.Printf("\n")
@@ -178,25 +162,51 @@ func fadeIn(str string, from, to uint32) {
 func main() {
 
 	// Take a random sentence, yeah latin would be nice :)
-	ipsum := "Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, commodo vitae, ornare sit amet, wisi. Aenean fermentum, elit eget tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. Donec non enim in turpis pulvinar facilisis. Ut felis. Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. Aliquam erat volutpat. Nam dui mi, tincidunt quis, accumsan porttitor, facilisis luctus, metus"
+	ipsum := "Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
 
-	// Foreground
-	fadeInFg(ipsum, true, false, false)
-	fadeInFg(ipsum, false, true, false)
-	fadeInFg(ipsum, false, false, true)
-	fadeInFg(ipsum, true, true, false)
-	fadeInFg(ipsum, true, false, true)
-	fadeInFg(ipsum, false, true, true)
-	fadeInFg(ipsum, true, true, true)
+	// Show the string in standard face for the sake of comparison
+	fmt.Println(ipsum)
+	fmt.Println()
 
-	// Background
-	fadeInBg(ipsum, true, false, false)
-	fadeInBg(ipsum, false, true, false)
-	fadeInBg(ipsum, false, false, true)
-	fadeInBg(ipsum, true, true, false)
-	fadeInBg(ipsum, true, false, true)
-	fadeInBg(ipsum, false, true, true)
-	fadeInBg(ipsum, true, true, true)
+	// Properties with Foreground
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.BOLD}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.DIM}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.ITALIC}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.UNDERLINE}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.SLOW_BLINK}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.RAPID_BLINK}, ipsum)
+	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.CROSSED_OUT}, ipsum)
+	fmt.Println()
 
-	fadeIn(ipsum, 0xff00ff, 0xffff00)
+	// Properties with Background
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.BOLD}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.DIM}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.ITALIC}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.UNDERLINE}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.SLOW_BLINK}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.RAPID_BLINK}, ipsum)
+	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.CROSSED_OUT}, ipsum)
+	fmt.Println()
+
+	// Foreground and background colors
+	fadeInForeground(ipsum, 0x000000, 0xff0000)
+	fadeInForeground(ipsum, 0x000000, 0x00ff00)
+	fadeInForeground(ipsum, 0x000000, 0x0000ff)
+
+	fadeInForeground(ipsum, 0x000000, 0xffffff)
+	fmt.Println()
+
+	fadeInBackground(ipsum, 0x000000, 0xff0000)
+	fadeInBackground(ipsum, 0x000000, 0x00ff00)
+	fadeInBackground(ipsum, 0x000000, 0x0000ff)
+
+	fadeInBackground(ipsum, 0x000000, 0xffffff)
+	fmt.Println()
+
+	fadeInForegroundBackground(ipsum, 0x000000, 0xff0000)
+	fadeInForegroundBackground(ipsum, 0x000000, 0x00ff00)
+	fadeInForegroundBackground(ipsum, 0x000000, 0x0000ff)
+
+	fadeInForegroundBackground(ipsum, 0x000000, 0xffffff)
+	fmt.Println()
 }
