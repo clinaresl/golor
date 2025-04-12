@@ -8,12 +8,53 @@
 
 // golor provides means for showing text on the standard output with different
 // selections of color for both the background and the foreground, and also
-// other properties. It is intended to ease usage.
+// other effects. It is intended to ease usage
 //
-// golor is strongly based on the interface provided by the fmt Print family
-// functions. It provides a new verb %C{} which encloses the string between
-// curly brackets (which is welcome to contain other verbs as well) with an ANSI
-// prefix and suffix that produce the desired effect
+// It provides the same interface than the Printf family functions, i.e., it
+// substitutes all verbs appearing in a string with the given arguments. In
+// addition, it provides a new verb, %C{...}:
+//
+//   - The argument given to %C{...} has to be a color specification.
+//
+//   - The ellipsis stands for any text which might also contain other verbs to be
+//     substituted. Currently, color verbs can not be nested and thus the text
+//     enclosed in a color verb can not contain %C{...}
+//
+// The following example shows how to write a sentence wtih two words, where
+// only the foreground colors and its properties (using the bitwise or operator)
+// have been set. The first word is shown in red and bold, whereas the second
+// appears in blue and underlined.
+//
+//	golor.Printf("%C{Hello} %C{World}\n", uint32(0xff0000)|golor.BOLD32, uint32(0x00ff00)|golor.UNDERLINE32)
+//
+// It is also possible to set both the foreground and background colors along
+// with its properties using uint64 as shown below. In this case, the
+// combination RGB of the background color has to be given before the foreground
+// color and the properties are set using the bitwise operator
+//
+//	golor.Printf("%C{Hello} %C{World}\n", uint64(0xaadd44ff0000)|golor.BOLD64, uint64(0x43207200ff00)|golor.UNDERLINE64)
+//
+// In case it is required, it is also possible to verbosely set a foreground
+// and/or a background along with a combination of properties using values of
+// the types [Effect], [FgEffect] and [BgEffect]
+//
+//	effect := golor.Effect{
+//	    Fg:         golor.Color{R: 0xff, G: 0x00, B: 0xff},
+//	    Properties: golor.ITALIC}
+//	golor.Printf("Happy %C{%v}!\n", effect, "coloring")
+//
+// which shows the word "coloring" in pink with a black background
+//
+// Note that %C{...} also allows using any other verbs, e.g.:
+//
+//	golor.Printf("Happy %C{%+v}!\n", effect, effect)
+//
+// which shows the contents of the definition of the variable effect defined
+// above in pink
+//
+// See the [README.md] file for more information
+//
+// [README.md]: https://github.com/clinaresl/golor/blob/main/README.md
 package golor
 
 import (
@@ -57,8 +98,8 @@ const (
 	bg_blue64    = 0x0000ff000000
 )
 
-// Constants that can be used for defining properties with the types [Effect],
-// [FgEffect] and [BgEffect]
+// The following constants can be used for defining properties with the types
+// [Effect], [FgEffect] and [BgEffect]
 const (
 	BOLD = 1 << (iota + 0)
 	DIM
@@ -69,7 +110,8 @@ const (
 	CROSSED_OUT
 )
 
-// Constants that can be used for defining properties with the type [Effect32]
+// The following constants must be used for defining properties with the type
+// [Effect32]
 const (
 	BOLD32 = 1 << (iota + 24)
 	DIM32
@@ -80,7 +122,8 @@ const (
 	CROSSED_OUT32
 )
 
-// Constants that can be used for defining properties with the type [Effect64]
+// The following constants must be used for defining properties with the type
+// [Effect64]
 const (
 	BOLD64 = 1 << (iota + 48)
 	DIM64
@@ -404,9 +447,9 @@ func processColorVerbs(format string, a ...any) (output string, args []any, narg
 	return
 }
 
-// Cprintf is the counterpart of Printf. It just substitutes the color verbs and
-// queries fmt.Printf to resolve the rest. It returns the number of bytes
-// written and any write error encountered.
+// golor.Printf is the counterpart of fmt.Printf. It just substitutes the color
+// verbs (%C{...}) and queries fmt.Printf to substitute the rest. It returns the
+// number of bytes written and any write error encountered.
 func Printf(format string, a ...any) (n int, err error) {
 
 	// First, substitute all the color verbs

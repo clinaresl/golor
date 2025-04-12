@@ -6,7 +6,8 @@
 // Carlos Linares López <carlos.linares@uc3m.es>
 //
 
-// This package contains a few utilities that can be used with golor
+// This package contains a few utilities that can be used with golor. See the
+// demo in the cmd directory to see an example of their usage
 package utils
 
 import (

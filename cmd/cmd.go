@@ -1,3 +1,9 @@
+// Small showcase of the capabilities of the golor module.
+//
+// This demo is not intended to show all possibilities, and it has been mostly
+// created to test the output in a specific console.
+//
+// It also uses the services provided in the utils package of the golor module
 package main
 
 import (
@@ -48,7 +54,7 @@ func main() {
 
 	// Show the string in standard face for the sake of comparison
 	fmt.Println(ipsum)
-	fmt.Println()
+	fmt.Println("---")
 
 	// Properties with Foreground
 	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.BOLD}, ipsum)
@@ -58,7 +64,7 @@ func main() {
 	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.SLOW_BLINK}, ipsum)
 	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.RAPID_BLINK}, ipsum)
 	golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.CROSSED_OUT}, ipsum)
-	fmt.Println()
+	fmt.Println("---")
 
 	// Properties with Background
 	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.BOLD}, ipsum)
@@ -68,7 +74,7 @@ func main() {
 	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.SLOW_BLINK}, ipsum)
 	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.RAPID_BLINK}, ipsum)
 	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0x20, G: 0x00, B: 0x80, Properties: golor.CROSSED_OUT}, ipsum)
-	fmt.Println()
+	fmt.Println("---")
 
 	// Foreground and background colors
 	fadeInForeground(ipsum, 0x000000, 0xff0000)
@@ -76,19 +82,19 @@ func main() {
 	fadeInForeground(ipsum, 0x000000, 0x0000ff)
 
 	fadeInForeground(ipsum, 0x000000, 0xffffff)
-	fmt.Println()
+	fmt.Println("---")
 
 	fadeInBackground(ipsum, 0x000000, 0xff0000)
 	fadeInBackground(ipsum, 0x000000, 0x00ff00)
 	fadeInBackground(ipsum, 0x000000, 0x0000ff)
 
 	fadeInBackground(ipsum, 0x000000, 0xffffff)
-	fmt.Println()
+	fmt.Println("---")
 
 	fadeInForegroundBackground(ipsum, 0x000000, 0xff0000)
 	fadeInForegroundBackground(ipsum, 0x000000, 0x00ff00)
 	fadeInForegroundBackground(ipsum, 0x000000, 0x0000ff)
 
 	fadeInForegroundBackground(ipsum, 0x000000, 0xffffff)
-	fmt.Println()
+	fmt.Println("---")
 }
