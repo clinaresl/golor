@@ -9,7 +9,7 @@ effects. It is intended to ease usage
 substitutes all verbs appearing in a string with the given arguments. In
 addition, it provides a new verb, `%C{...}`:
 
-+ The argument given to `%C{...}` has to be a color specification. See 
++ The argument given to `%C{...}` has to be a color specification. See [Color specification](# Color specification)
 
 + The ellipsis stands for any text which might also contain other verbs to be
   substituted. Currently, *color verbs* can not be nested and thus the text
@@ -26,7 +26,9 @@ The foreground color and properties of a color verb can be set with either a
 value of type `golor.FgEffect` or with a `uint32`:
 
 ``` go
-golor.Printf("%C{%v}\n", golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.BOLD}, "Hello World!")
+golor.Printf("%C{%v}\n", 
+    golor.FgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.BOLD}, 
+    "Hello World!")
 golor.Printf("%C{%v}\n", uint32(0xffaa00)|golor.BOLD32, "Hello World!")
 ```
 
@@ -39,7 +41,9 @@ Likewise, the background color and properties of some text can be set using
 either a value of type `golor.BgEffect` or with an `uint64`:
 
 ``` go
-	golor.Printf("%C{%v}\n", golor.BgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.ITALIC}, "Hello World!")
+	golor.Printf("%C{%v}\n", 
+        golor.BgEffect{R: 0xff, G: 0xaa, B: 0x00, Properties: golor.ITALIC}, 
+        "Hello World!")
 	golor.Printf("%C{%v}\n", uint64(0xffaa00000000)|golor.ITALIC64, "Hello World!")
 ```
 
@@ -55,7 +59,7 @@ green and blue, and `B` and `F` stand for the background and foreground color.
 
 It is also possible to set both the foreground and background colors with any
 combination of properties either using a value of type `golor.Effect` or an
-`uint64` (encoded as explained above):
+`uint64` (See [Background Color](# Background color)):
 
 ``` go
 	golor.Printf("%C{%v}\n",
