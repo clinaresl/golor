@@ -9,7 +9,7 @@ effects. It is intended to ease usage
 substitutes all verbs appearing in a string with the given arguments. In
 addition, it provides a new verb, `%C{...}`:
 
-+ The argument given to `%C{...}` has to be a color specification. See [Color specification](# Color specification)
++ The argument given to `%C{...}` has to be a color specification. See [Color specification](#color-specification)
 
 + The ellipsis stands for any text which might also contain other verbs to be
   substituted. Currently, *color verbs* can not be nested and thus the text
@@ -59,7 +59,7 @@ green and blue, and `B` and `F` stand for the background and foreground color.
 
 It is also possible to set both the foreground and background colors with any
 combination of properties either using a value of type `golor.Effect` or an
-`uint64` (See [Background Color](# Background color)):
+`uint64` (See [Background Color](#background-color)):
 
 ``` go
 	golor.Printf("%C{%v}\n",
